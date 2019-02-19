@@ -55,6 +55,7 @@ init_cube(struct vkcube *vc)
 {
    VkResult r;
 
+#if 0
    VkDescriptorSetLayout set_layout;
    vkCreateDescriptorSetLayout(vc->device,
                                &(VkDescriptorSetLayoutCreateInfo) {
@@ -71,12 +72,15 @@ init_cube(struct vkcube *vc)
                                },
                                NULL,
                                &set_layout);
+#endif
 
    vkCreatePipelineLayout(vc->device,
                           &(VkPipelineLayoutCreateInfo) {
                              .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+#if 0
                              .setLayoutCount = 1,
                              .pSetLayouts = &set_layout,
+#endif
                           },
                           NULL,
                           &vc->pipeline_layout);
@@ -226,9 +230,10 @@ init_cube(struct vkcube *vc)
 
    static const float vVertices[] = {
       // front
-      -1.0f, -1.0f, +1.0f, // point blue
-      +1.0f, -1.0f, +1.0f, // point magenta
-      -1.0f, +1.0f, +1.0f, // point cyan
+      0.0f, -1.0f, 0.0f, // point red
+      1.0f, 1.0f, 0.0f, // point green
+      -1.0f, 1.0f, 0.0f, // point blue
+#if 0
       +1.0f, +1.0f, +1.0f, // point white
       // back
       +1.0f, -1.0f, -1.0f, // point red
@@ -255,13 +260,15 @@ init_cube(struct vkcube *vc)
       +1.0f, -1.0f, -1.0f, // point red
       -1.0f, -1.0f, +1.0f, // point blue
       +1.0f, -1.0f, +1.0f  // point magenta
+#endif
    };
 
    static const float vColors[] = {
       // front
+      1.0f,  0.0f,  0.0f, // red
+      0.0f,  1.0f,  0.0f, // green
       0.0f,  0.0f,  1.0f, // blue
-      1.0f,  0.0f,  1.0f, // magenta
-      0.0f,  1.0f,  1.0f, // cyan
+#if 0
       1.0f,  1.0f,  1.0f, // white
       // back
       1.0f,  0.0f,  0.0f, // red
@@ -288,6 +295,7 @@ init_cube(struct vkcube *vc)
       1.0f,  0.0f,  0.0f, // red
       0.0f,  0.0f,  1.0f, // blue
       1.0f,  0.0f,  1.0f  // magenta
+#endif
    };
 
    static const float vNormals[] = {
@@ -295,6 +303,7 @@ init_cube(struct vkcube *vc)
       +0.0f, +0.0f, +1.0f, // forward
       +0.0f, +0.0f, +1.0f, // forward
       +0.0f, +0.0f, +1.0f, // forward
+#if 0
       +0.0f, +0.0f, +1.0f, // forward
       // back
       +0.0f, +0.0f, -1.0f, // backbard
@@ -321,6 +330,7 @@ init_cube(struct vkcube *vc)
       +0.0f, -1.0f, +0.0f, // down
       +0.0f, -1.0f, +0.0f, // down
       +0.0f, -1.0f, +0.0f  // down
+#endif
    };
 
    vc->vertex_offset = sizeof(struct ubo);
@@ -364,6 +374,7 @@ init_cube(struct vkcube *vc)
 
    vkBindBufferMemory(vc->device, vc->buffer, vc->mem, 0);
 
+#if 0
    VkDescriptorPool desc_pool;
    const VkDescriptorPoolCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -406,6 +417,7 @@ init_cube(struct vkcube *vc)
                              }
                           },
                           0, NULL);
+#endif
 }
 
 static void
@@ -475,11 +487,13 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
 
    vkCmdBindPipeline(b->cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vc->pipeline);
 
+#if 0
    vkCmdBindDescriptorSets(b->cmd_buffer,
                            VK_PIPELINE_BIND_POINT_GRAPHICS,
                            vc->pipeline_layout,
                            0, 1,
                            &vc->descriptor_set, 0, NULL);
+#endif
 
    const VkViewport viewport = {
       .x = 0,
@@ -497,12 +511,16 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
    };
    vkCmdSetScissor(b->cmd_buffer, 0, 1, &scissor);
 
+#if 0
    vkCmdDraw(b->cmd_buffer, 4, 1, 0, 0);
    vkCmdDraw(b->cmd_buffer, 4, 1, 4, 0);
    vkCmdDraw(b->cmd_buffer, 4, 1, 8, 0);
    vkCmdDraw(b->cmd_buffer, 4, 1, 12, 0);
    vkCmdDraw(b->cmd_buffer, 4, 1, 16, 0);
    vkCmdDraw(b->cmd_buffer, 4, 1, 20, 0);
+#else
+   vkCmdDraw(b->cmd_buffer, 3, 1, 0, 0);
+#endif
 
    vkCmdEndRenderPass(b->cmd_buffer);
 
