@@ -361,6 +361,13 @@ init_cube(struct vkcube *vc)
    memcpy(vc->map + vc->vertex_offset, vVertices, sizeof(vVertices));
    memcpy(vc->map + vc->colors_offset, vColors, sizeof(vColors));
    memcpy(vc->map + vc->normals_offset, vNormals, sizeof(vNormals));
+   /* ... */
+   vkFlushMappedMemoryRanges(vc->device, 1,
+   		   &(VkMappedMemoryRange) {
+   		   	.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+   		   	.memory = vc->mem,
+   		   	.size = mem_size,
+		   });
 
    vkBindBufferMemory(vc->device, vc->buffer, vc->mem, 0);
 
@@ -438,6 +445,13 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
    memcpy(ubo.normal, &ubo.modelview, sizeof ubo.normal);
 
    memcpy(vc->map, &ubo, sizeof(ubo));
+   /* ... */
+   vkFlushMappedMemoryRanges(vc->device, 1,
+   		   &(VkMappedMemoryRange) {
+   		   	.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+   		   	.memory = vc->mem,
+   		   	.size = sizeof(ubo),
+		   });
 
    vkWaitForFences(vc->device, 1, &b->fence, VK_TRUE, UINT64_MAX);
    vkResetFences(vc->device, 1, &b->fence);

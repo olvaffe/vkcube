@@ -39,6 +39,9 @@ struct vkcube_buffer {
 
    uint32_t fb;
    uint32_t stride;
+
+   VkBuffer staging;
+   VkDeviceMemory staging_mem;
 };
 
 struct vkcube;

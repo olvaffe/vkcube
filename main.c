@@ -164,7 +164,7 @@ init_vk(struct vkcube *vc, const char *extension)
                         .queueCount = 1,
                         .pQueuePriorities = (float []) { 1.0f },
                      },
-                     .enabledExtensionCount = 1,
+                     .enabledExtensionCount = extension ? 1 : 0,
                      .ppEnabledExtensionNames = (const char * const []) {
                         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                      },
@@ -189,7 +189,7 @@ init_vk_objects(struct vkcube *vc)
                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-               .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+               .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             }
          },
          .subpassCount = 1,
@@ -358,10 +358,54 @@ write_buffer(struct vkcube *vc, struct vkcube_buffer *b)
    uint32_t mem_size = b->stride * vc->height;
    void *map;
 
-   vkMapMemory(vc->device, b->mem, 0, mem_size, 0, &map);
+   vkBeginCommandBuffer(b->cmd_buffer,
+                        &(VkCommandBufferBeginInfo) {
+                           .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                           .flags = 0
+                        });
+   vkCmdCopyImageToBuffer(b->cmd_buffer, b->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+   		   b->staging,
+		   1, &(VkBufferImageCopy){
+			   .imageSubresource = {
+				   .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				   .layerCount = 1,
+			   },
+			   .imageExtent = {
+				   .width = vc->width,
+				   .height = vc->height,
+				   .depth = 1,
+			},
+		   });
+   vkEndCommandBuffer(b->cmd_buffer);
+   vkQueueSubmit(vc->queue, 1,
+      &(VkSubmitInfo) {
+         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+         .commandBufferCount = 1,
+         .pCommandBuffers = &b->cmd_buffer,
+      }, VK_NULL_HANDLE);
+
+   vkQueueWaitIdle(vc->queue);
+   vkMapMemory(vc->device, b->staging_mem, 0, mem_size, 0, &map);
+   vkInvalidateMappedMemoryRanges(vc->device, 1,
+   		   &(VkMappedMemoryRange) {
+   		   	.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+   		   	.memory = b->staging_mem,
+   		   	.size = mem_size,
+		   });
 
    fprintf(stderr, "writing first frame to %s\n", filename);
    write_png(filename, vc->width, vc->height, b->stride, map);
+}
+
+static int find_host_coherent_memory(struct vkcube *vc, unsigned allowed)
+{
+    for (unsigned i = 0; (1u << i) <= allowed && i <= vc->memory_properties.memoryTypeCount; ++i) {
+        if ((allowed & (1u << i)) &&
+            (vc->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
+            (vc->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+            return i;
+    }
+    return -1;
 }
 
 // Return -1 on failure.
@@ -383,7 +427,7 @@ init_headless(struct vkcube *vc)
                     .mipLevels = 1,
                     .arrayLayers = 1,
                     .samples = 1,
-                    .tiling = VK_IMAGE_TILING_LINEAR,
+                    .tiling = VK_IMAGE_TILING_OPTIMAL,
                     .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                     .flags = 0,
                  },
@@ -397,7 +441,7 @@ init_headless(struct vkcube *vc)
                     &(VkMemoryAllocateInfo) {
                        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                        .allocationSize = requirements.size,
-                       .memoryTypeIndex = 0
+                       .memoryTypeIndex = ffs(requirements.memoryTypeBits) - 1,
                     },
                     NULL,
                     &b->mem);
@@ -407,6 +451,29 @@ init_headless(struct vkcube *vc)
    b->stride = vc->width * 4;
 
    init_buffer(vc, &vc->buffers[0]);
+
+   vkCreateBuffer(vc->device,
+   		   &(VkBufferCreateInfo) {
+   		   	.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+   		   	.size = vc->width * vc->height * 4,
+   		   	.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		   },
+		   NULL,
+		   &b->staging);
+   vkGetBufferMemoryRequirements(vc->device, b->staging, &requirements);
+
+   int mem_type = find_host_coherent_memory(vc, requirements.memoryTypeBits);
+   assert(mem_type >= 0);
+   vkAllocateMemory(vc->device,
+                    &(VkMemoryAllocateInfo) {
+                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                       .allocationSize = requirements.size,
+                       .memoryTypeIndex = mem_type,
+                    },
+                    NULL,
+                    &b->staging_mem);
+
+   vkBindBufferMemory(vc->device, b->staging, b->staging_mem, 0);
 
    return 0;
 }
@@ -1668,6 +1735,12 @@ mainloop(struct vkcube *vc)
       mainloop_khr(vc);
       break;
    case DISPLAY_MODE_HEADLESS:
+      vkQueueSubmit(vc->queue, 1,
+         &(VkSubmitInfo) {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores = &vc->semaphore,
+         }, VK_NULL_HANDLE);
       vc->model.render(vc, &vc->buffers[0]);
       write_buffer(vc, &vc->buffers[0]);
       break;
